@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: game-platform-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: game_platform
+      MYSQL_USER: gameuser
+      MYSQL_PASSWORD: gamepassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - game-platform-network
+
+  # 后端API服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: game-platform-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=gameuser
+      - DB_PASSWORD=gamepassword
+      - DB_NAME=game_platform
+      - JWT_SECRET=your_very_long_random_secret_key_here_change_this_in_production
+      - JWT_EXPIRES_IN=7d
+      - CORS_ORIGIN=http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mysql
+    volumes:
+      - ./backend/uploads:/app/uploads
+    networks:
+      - game-platform-network
+
+  # 前端Web服务 (仅用于生产环境)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: game-platform-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - game-platform-network
+
+  # Redis (可选，用于缓存和会话存储)
+  redis:
+    image: redis:7-alpine
+    container_name: game-platform-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - game-platform-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  game-platform-network:
+    driver: bridge 
